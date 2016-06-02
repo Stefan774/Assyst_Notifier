@@ -1,27 +1,31 @@
 package ru.mvideo.assystnotifier;
 
+import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
 import com.sun.deploy.util.WinRegistry;
-import javafx.application.*;
+import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-
 import javafx.scene.image.Image;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.text.Text;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 
-import javax.swing.JOptionPane;
-import java.sql.*;
-import java.util.Objects;
 import javax.imageio.ImageIO;
+import javax.swing.*;
 import java.io.IOException;
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.util.Objects;
 
-import com.microsoft.sqlserver.jdbc.*;
+import static java.lang.Math.round;
 
 public class Login extends Application {
 
@@ -80,20 +84,13 @@ public class Login extends Application {
         hbBtn.getChildren().add(btn);
         grid.add(hbBtn, 1, 4);
 
-//        Image image = new Image("file:res/mvideo.png");
-//        grid.add(image, 0, 5, 0, 6);
-
-//        final Text actiontarget = new Text();
-//        grid.add(actiontarget, 1, 6);
-//        actiontarget.setId("actiontarget");
-
         btn.setOnAction(e -> connectToDB());
 
         Scene scene = new Scene(grid, 300, 290);
         Rectangle2D rect = Screen.getPrimary().getVisualBounds();
 
-        loginForm.setX(rect.getMaxX()-315);
-        loginForm.setY(rect.getMaxY()-325);
+        loginForm.setX(rect.getMaxX() - 315);
+        loginForm.setY(rect.getMaxY() - 325);
         loginForm.setScene(scene);
 
         scene.getStylesheets().add(Login.class.getResource("res/Login.css").toExternalForm());
@@ -107,8 +104,25 @@ public class Login extends Application {
         }
         loginForm.setOnCloseRequest(we -> trayIcon.displayMessage("Внимание", "Приложение все еще работает. Если потребуется восстановить окно приложения, используйте трей иконку.", java.awt.TrayIcon.MessageType.INFO));
 
-        loginForm.show();
-        addAppToTray();
+
+        GridPane root = new GridPane();
+        Scene splashScene = new Scene(root, 600, 300);
+        root.setOnMouseClicked(e -> {
+            primaryStage.close();
+            loginForm.show();
+            addAppToTray();
+        });
+
+        primaryStage.setX(round(rect.getMaxX() / 2) - 300);
+        primaryStage.setY(round(rect.getMaxY() / 2) - 150);
+        primaryStage.setScene(splashScene);
+
+        splashScene.getStylesheets().add(Login.class.getResource("res/SplashSCreen.css").toExternalForm());
+        primaryStage.initStyle(StageStyle.UNDECORATED);
+        primaryStage.setAlwaysOnTop(true);
+        primaryStage.show();
+
+
     }
 
     private boolean connectToDB() {
