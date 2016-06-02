@@ -2,6 +2,7 @@ package ru.mvideo.assystnotifier;
 
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
 import com.sun.deploy.util.WinRegistry;
+import javafx.animation.FadeTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -16,6 +17,7 @@ import javafx.scene.text.Text;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import javafx.util.Duration;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -115,10 +117,16 @@ public class Login extends Application {
 
         primaryStage.setX(round(rect.getMaxX() / 2) - 300);
         primaryStage.setY(round(rect.getMaxY() / 2) - 150);
+
+        primaryStage.initStyle(StageStyle.TRANSPARENT);
+
+        FadeTransition ft = new FadeTransition(Duration.millis(2000), root);
+        ft.setFromValue(0.0);
+        ft.setToValue(1.0);
+        ft.play();
         primaryStage.setScene(splashScene);
 
         splashScene.getStylesheets().add(Login.class.getResource("res/SplashSCreen.css").toExternalForm());
-        primaryStage.initStyle(StageStyle.UNDECORATED);
         primaryStage.setAlwaysOnTop(true);
         primaryStage.show();
 
