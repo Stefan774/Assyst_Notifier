@@ -2,12 +2,9 @@
   <library name="sqljdbc42">
     <CLASSES>
       <root url="jar://$PROJECT_DIR$/lib/sqljdbc42.jar!/" />
+      <root url="jar://$APPLICATION_HOME_DIR$/jre/jre/lib/deploy.jar!/com/sun/deploy" />
     </CLASSES>
     <JAVADOC />
-    <NATIVE>
-      <root url="file://$PROJECT_DIR$/lib/auth/x64" />
-      <root url="file://$PROJECT_DIR$/lib/auth/x86" />
-    </NATIVE>
     <SOURCES />
   </library>
 </component>

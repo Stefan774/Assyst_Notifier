@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="AssystN">
+    <output-path>$PROJECT_DIR$/out/artifacts/AssystN</output-path>
+    <root id="archive" name="AssystN.jar">
+      <element id="module-output" name="Login" />
+    </root>
+  </artifact>
+</component>

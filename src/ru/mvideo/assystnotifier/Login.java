@@ -20,7 +20,7 @@ import javafx.stage.StageStyle;
 import javafx.util.Duration;
 
 import javax.imageio.ImageIO;
-import javax.swing.*;
+import javax.swing.JOptionPane;
 import java.io.IOException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
@@ -100,7 +100,7 @@ public class Login extends Application {
         if (WinRegistry.doesSubKeyExist(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier")) {
             if (Objects.equals(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred"), "Y")) {
                 userTextField.setText(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login"));
-                pwBox.setText(decrypt(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password").getBytes(), "qwerty"));
+                pwBox.setText(decrypt(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password").getBytes(), userTextField.getText()));
                 cbox.setSelected(true);
             }
         }
@@ -140,7 +140,7 @@ public class Login extends Application {
                 JOptionPane.showMessageDialog(null, "Добро пожаловать, " + name, "Успешное подключение к БД", JOptionPane.INFORMATION_MESSAGE);
                 if (cbox.isSelected()) {
                     WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login", userTextField.getText());
-                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password", new String(encrypt(pwBox.getText(), "qwerty")));
+                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password", new String(encrypt(pwBox.getText(), userTextField.getText())));
                     WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "Y");
 
                     JOptionPane.showMessageDialog(null, "Логин и пароль будет сохранен", "Повторный вход", JOptionPane.INFORMATION_MESSAGE);
@@ -203,34 +203,23 @@ public class Login extends Application {
 
     private void addAppToTray() {
         try {
-            // ensure awt toolkit is initialized.
             java.awt.Toolkit.getDefaultToolkit();
 
-            // set up a system tray icon.
             java.awt.SystemTray tray = java.awt.SystemTray.getSystemTray();
             java.awt.Image image = ImageIO.read(Login.class.getResource("res/icon16.png"));
             trayIcon = new java.awt.TrayIcon(image);
 
-            // if the user double-clicks on the tray icon, show the main app stage.
             trayIcon.addActionListener(event -> Platform.runLater(this::showStage));
 
-            // if the user selects the default menu item (which includes the app name),
-            // show the main app stage.
             java.awt.MenuItem openItem = new java.awt.MenuItem("Показать приложение");
             openItem.addActionListener(event -> Platform.runLater(this::showStage));
 
-            // the convention for tray icons seems to be to set the default icon for opening
-            // the application stage in a bold font.
-//            java.awt.Font defaultFont = java.awt.Font.decode(null);
-//            java.awt.Font boldFont = defaultFont.deriveFont(java.awt.Font.BOLD);
-//            openItem.setFont(boldFont);
+            java.awt.Font defaultFont = java.awt.Font.decode(null);
+            java.awt.Font boldFont = defaultFont.deriveFont(java.awt.Font.BOLD);
+            openItem.setFont(boldFont);
 
-            // to really exit the application, the user must go to the system tray icon
-            // and select the exit option, this will shutdown JavaFX and remove the
-            // tray icon (removing the tray icon will also shut down AWT).
             java.awt.MenuItem exitItem = new java.awt.MenuItem("Выход");
             exitItem.addActionListener(event -> {
-//                notificationTimer.cancel();
                 Platform.exit();
                 tray.remove(trayIcon);
             });
