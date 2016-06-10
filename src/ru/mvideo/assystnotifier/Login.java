@@ -1,7 +1,7 @@
 package ru.mvideo.assystnotifier;
 
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
-import com.sun.deploy.util.WinRegistry;
+//import com.sun.deploy.util.WinRegistry;
 import javafx.animation.FadeTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -21,11 +21,11 @@ import javafx.util.Duration;
 
 import javax.imageio.ImageIO;
 import javax.swing.JOptionPane;
+import java.io.File;
 import java.io.IOException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
-import java.util.Objects;
 
 import static java.lang.Math.round;
 
@@ -40,6 +40,13 @@ public class Login extends Application {
     private PasswordField pwBox;
     private CheckBox cbox;
     private java.awt.TrayIcon trayIcon;
+
+    private String serverName;
+    private String dbName;
+    private int portNumber;
+    private String userLogin;
+    private String userPassword;
+
 
     @Override
     public void start(Stage primaryStage) {
@@ -97,13 +104,32 @@ public class Login extends Application {
 
         scene.getStylesheets().add(Login.class.getResource("res/Login.css").toExternalForm());
 
-        if (WinRegistry.doesSubKeyExist(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier")) {
-            if (Objects.equals(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred"), "Y")) {
-                userTextField.setText(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login"));
-                pwBox.setText(decrypt(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password").getBytes(), userTextField.getText()));
-                cbox.setSelected(true);
-            }
+        try {
+            INIConfig ini = new INIConfig(new File("C:/settings.ini"));
+            serverName = ini.getProperty("Settings", "ServerName", "10.95.1.56");
+            dbName = ini.getProperty("Settings", "DBName", "mvideorus_db");
+            portNumber = ini.getProperty("Settings", "Port", 1433);
+            userLogin = ini.getProperty("User", "Login", "");
+            userPassword = ini.getProperty("User", "Password", "");
+            userTextField.setText(userLogin);
+            pwBox.setText(decrypt(userPassword.getBytes(), userLogin));
+
+        } catch (IOException e) {
+            serverName = "10.95.1.56";
+            dbName = "mvideorus_db";
+            portNumber = 1433;
+            userLogin = "";
+            userPassword = "";
         }
+
+
+//        if (WinRegistry.doesSubKeyExist(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier")) {
+//            if (Objects.equals(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred"), "Y")) {
+//                userTextField.setText(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login"));
+//                pwBox.setText(decrypt(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password").getBytes(), userTextField.getText()));
+//                cbox.setSelected(true);
+//            }
+//        }
         loginForm.setOnCloseRequest(we -> trayIcon.displayMessage("Внимание", "Приложение все еще работает. Если потребуется восстановить окно приложения, используйте трей иконку.", java.awt.TrayIcon.MessageType.INFO));
 
 
@@ -121,12 +147,15 @@ public class Login extends Application {
         primaryStage.initStyle(StageStyle.TRANSPARENT);
 
         FadeTransition ft = new FadeTransition(Duration.millis(2000), root);
+
         ft.setFromValue(0.0);
         ft.setToValue(1.0);
+//        ft.setAutoReverse(true);
+//        ft.setCycleCount(1);
         ft.play();
         primaryStage.setScene(splashScene);
 
-        splashScene.getStylesheets().add(Login.class.getResource("res/SplashSCreen.css").toExternalForm());
+        splashScene.getStylesheets().add(Login.class.getResource("res/SplashScreen.css").toExternalForm());
         primaryStage.setAlwaysOnTop(true);
         primaryStage.show();
 
@@ -139,12 +168,13 @@ public class Login extends Application {
             if (!name.equals("")) {
                 JOptionPane.showMessageDialog(null, "Добро пожаловать, " + name, "Успешное подключение к БД", JOptionPane.INFORMATION_MESSAGE);
                 if (cbox.isSelected()) {
-                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login", userTextField.getText());
-                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password", new String(encrypt(pwBox.getText(), userTextField.getText())));
-                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "Y");
 
+//                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login", userTextField.getText());
+//                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password", new String(encrypt(pwBox.getText(), userTextField.getText())));
+//                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "Y");
+//
                     JOptionPane.showMessageDialog(null, "Логин и пароль будет сохранен", "Повторный вход", JOptionPane.INFORMATION_MESSAGE);
-
+//
                 }
                 userTextField.setText("");
                 pwBox.setText("");
@@ -165,9 +195,9 @@ public class Login extends Application {
         try {
             // Подключаемся к БД
             SQLServerDataSource ds = new SQLServerDataSource();
-            ds.setServerName("10.95.1.56");
-            ds.setPortNumber(1433);
-            ds.setDatabaseName("mvideorus_db");
+            ds.setServerName(serverName);
+            ds.setPortNumber(portNumber);
+            ds.setDatabaseName(dbName);
             ds.setUser(login);
             ds.setPassword(pass);
             con = ds.getConnection();
