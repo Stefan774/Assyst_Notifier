@@ -2,7 +2,8 @@
   <library name="sqljdbc42">
     <CLASSES>
       <root url="jar://$PROJECT_DIR$/lib/sqljdbc42.jar!/" />
-      <root url="jar://$APPLICATION_HOME_DIR$/jre/jre/lib/deploy.jar!/com/sun/deploy" />
+      <root url="jar://$PROJECT_DIR$/lib/jna-4.2.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/jna-platform-4.2.1.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

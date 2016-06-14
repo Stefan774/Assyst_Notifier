@@ -1,7 +1,7 @@
 package ru.mvideo.assystnotifier;
 
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
-//import com.sun.deploy.util.WinRegistry;
+import com.sun.jna.platform.win32.WinReg;
 import javafx.animation.FadeTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -21,11 +21,11 @@ import javafx.util.Duration;
 
 import javax.imageio.ImageIO;
 import javax.swing.JOptionPane;
-import java.io.File;
 import java.io.IOException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.util.Objects;
 
 import static java.lang.Math.round;
 
@@ -104,61 +104,59 @@ public class Login extends Application {
 
         scene.getStylesheets().add(Login.class.getResource("res/Login.css").toExternalForm());
 
-        try {
-            INIConfig ini = new INIConfig(new File("C:/settings.ini"));
-            serverName = ini.getProperty("Settings", "ServerName", "10.95.1.56");
-            dbName = ini.getProperty("Settings", "DBName", "mvideorus_db");
-            portNumber = ini.getProperty("Settings", "Port", 1433);
-            userLogin = ini.getProperty("User", "Login", "");
-            userPassword = ini.getProperty("User", "Password", "");
+        if (Objects.equals(RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred"), "Y")) {
+            userLogin = RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login");
+            userPassword = decrypt(RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password").getBytes(), userLogin);
+            serverName = RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "ServerName");
+            dbName = RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "DBName");
+            portNumber = Integer.parseInt(RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "PortNumber"));
             userTextField.setText(userLogin);
-            pwBox.setText(decrypt(userPassword.getBytes(), userLogin));
-
-        } catch (IOException e) {
+            pwBox.setText(userPassword);
+            cbox.setSelected(true);
+        } else {
             serverName = "10.95.1.56";
             dbName = "mvideorus_db";
             portNumber = 1433;
             userLogin = "";
             userPassword = "";
+            saveDefaultDataInRegistry();
         }
 
-
-//        if (WinRegistry.doesSubKeyExist(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier")) {
-//            if (Objects.equals(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred"), "Y")) {
-//                userTextField.setText(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login"));
-//                pwBox.setText(decrypt(WinRegistry.getString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password").getBytes(), userTextField.getText()));
-//                cbox.setSelected(true);
-//            }
-//        }
         loginForm.setOnCloseRequest(we -> trayIcon.displayMessage("Внимание", "Приложение все еще работает. Если потребуется восстановить окно приложения, используйте трей иконку.", java.awt.TrayIcon.MessageType.INFO));
 
 
         GridPane root = new GridPane();
         Scene splashScene = new Scene(root, 600, 300);
-        root.setOnMouseClicked(e -> {
-            primaryStage.close();
-            loginForm.show();
-            addAppToTray();
-        });
+
+//        root.setOnMouseClicked(e -> {
+//        });
 
         primaryStage.setX(round(rect.getMaxX() / 2) - 300);
         primaryStage.setY(round(rect.getMaxY() / 2) - 150);
 
         primaryStage.initStyle(StageStyle.TRANSPARENT);
 
+//      --- Настройка анимации сплэш окна
         FadeTransition ft = new FadeTransition(Duration.millis(2000), root);
 
         ft.setFromValue(0.0);
         ft.setToValue(1.0);
-//        ft.setAutoReverse(true);
-//        ft.setCycleCount(1);
+        ft.setAutoReverse(true);
+        ft.setCycleCount(2);
         ft.play();
-        primaryStage.setScene(splashScene);
+        ft.setOnFinished(e -> {
+            primaryStage.close();
+            loginForm.show();
+            addAppToTray();
+        });
+//      ---
 
         splashScene.getStylesheets().add(Login.class.getResource("res/SplashScreen.css").toExternalForm());
+
+        primaryStage.setScene(splashScene);
+
         primaryStage.setAlwaysOnTop(true);
         primaryStage.show();
-
 
     }
 
@@ -168,13 +166,11 @@ public class Login extends Application {
             if (!name.equals("")) {
                 JOptionPane.showMessageDialog(null, "Добро пожаловать, " + name, "Успешное подключение к БД", JOptionPane.INFORMATION_MESSAGE);
                 if (cbox.isSelected()) {
+                    RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "Y");
+                    RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login", userTextField.getText());
+                    RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password", new String(encrypt(pwBox.getText(), userTextField.getText())));
 
-//                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login", userTextField.getText());
-//                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password", new String(encrypt(pwBox.getText(), userTextField.getText())));
-//                    WinRegistry.setStringValue(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "Y");
-//
-                    JOptionPane.showMessageDialog(null, "Логин и пароль будет сохранен", "Повторный вход", JOptionPane.INFORMATION_MESSAGE);
-//
+                    JOptionPane.showMessageDialog(null, "Логин и пароль сохранен", "Вход в программу", JOptionPane.INFORMATION_MESSAGE);
                 }
                 userTextField.setText("");
                 pwBox.setText("");
@@ -276,6 +272,18 @@ public class Login extends Application {
             loginForm.setIconified(false);
             loginForm.toFront();
         }
+    }
+
+    private void saveDefaultDataInRegistry() {
+        if (!RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "ServerName", "10.95.1.56"))
+            System.out.println("Не записан ServerName");
+        if (!RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "DBName", "mvideorus_db"))
+            System.out.println("Не записан DBName");
+        if (!RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "PortNumber", "1433"))
+            System.out.println("Не записан PortNumber");
+        if (!RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "N"))
+            System.out.println("Не записан SaveCred");
+
     }
 
     private byte[] encrypt(String text, String keyWord) {
