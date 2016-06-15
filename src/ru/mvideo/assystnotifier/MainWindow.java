@@ -1,6 +1,7 @@
 package ru.mvideo.assystnotifier;
 
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
+import com.microsoft.sqlserver.jdbc.SQLServerException;
 import com.sun.jna.platform.win32.WinReg;
 import javafx.animation.FadeTransition;
 import javafx.application.Application;
@@ -22,14 +23,14 @@ import javafx.util.Duration;
 import javax.imageio.ImageIO;
 import javax.swing.JOptionPane;
 import java.io.IOException;
-import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Objects;
 
 import static java.lang.Math.round;
 
-public class Login extends Application {
+public class MainWindow extends Application {
 
     public static void main(String[] args) {
         launch(args);
@@ -46,6 +47,8 @@ public class Login extends Application {
     private int portNumber;
     private String userLogin;
     private String userPassword;
+
+    private Connection con = null;
 
 
     @Override
@@ -85,7 +88,7 @@ public class Login extends Application {
         cbox.setText("Запомнить");
         grid.add(cbox, 1, 3);
 
-        pwBox.setOnAction(e -> connectToDB());
+        pwBox.setOnAction(e -> tryConnectToDB());
 
         Button btn = new Button("Войти");
         HBox hbBtn = new HBox(10);
@@ -93,7 +96,7 @@ public class Login extends Application {
         hbBtn.getChildren().add(btn);
         grid.add(hbBtn, 1, 4);
 
-        btn.setOnAction(e -> connectToDB());
+        btn.setOnAction(e -> tryConnectToDB());
 
         Scene scene = new Scene(grid, 300, 290);
         Rectangle2D rect = Screen.getPrimary().getVisualBounds();
@@ -102,7 +105,7 @@ public class Login extends Application {
         loginForm.setY(rect.getMaxY() - 325);
         loginForm.setScene(scene);
 
-        scene.getStylesheets().add(Login.class.getResource("res/Login.css").toExternalForm());
+        scene.getStylesheets().add(MainWindow.class.getResource("res/Login.css").toExternalForm());
 
         if (Objects.equals(RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred"), "Y")) {
             userLogin = RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login");
@@ -119,7 +122,8 @@ public class Login extends Application {
             portNumber = 1433;
             userLogin = "";
             userPassword = "";
-            saveDefaultDataInRegistry();
+            if (!saveDefaultDataInRegistry())
+                JOptionPane.showMessageDialog(null, "Возникла проблема при сохранении данных о подключении к БД", "Вход в программу", JOptionPane.ERROR_MESSAGE);
         }
 
         loginForm.setOnCloseRequest(we -> trayIcon.displayMessage("Внимание", "Приложение все еще работает. Если потребуется восстановить окно приложения, используйте трей иконку.", java.awt.TrayIcon.MessageType.INFO));
@@ -127,9 +131,6 @@ public class Login extends Application {
 
         GridPane root = new GridPane();
         Scene splashScene = new Scene(root, 600, 300);
-
-//        root.setOnMouseClicked(e -> {
-//        });
 
         primaryStage.setX(round(rect.getMaxX() / 2) - 300);
         primaryStage.setY(round(rect.getMaxY() / 2) - 150);
@@ -143,15 +144,15 @@ public class Login extends Application {
         ft.setToValue(1.0);
         ft.setAutoReverse(true);
         ft.setCycleCount(2);
-        ft.play();
         ft.setOnFinished(e -> {
             primaryStage.close();
             loginForm.show();
             addAppToTray();
         });
+        ft.play();
 //      ---
 
-        splashScene.getStylesheets().add(Login.class.getResource("res/SplashScreen.css").toExternalForm());
+        splashScene.getStylesheets().add(MainWindow.class.getResource("res/SplashScreen.css").toExternalForm());
 
         primaryStage.setScene(splashScene);
 
@@ -160,17 +161,32 @@ public class Login extends Application {
 
     }
 
-    private boolean connectToDB() {
+    private boolean saveCred() {
+        boolean result = false;
+        // сохраняем логин и зашифрованный пароль в реестре
+        if (RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "Y"))
+            result = true;
+        if (RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login", userTextField.getText()))
+            result = true;
+        if (RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password", new String(encrypt(pwBox.getText(), userTextField.getText()))))
+            result = true;
+        return result;
+    }
+
+    private boolean tryConnectToDB() {
         if (!userTextField.getText().equals("") && !pwBox.getText().equals("")) {
-            String name = tryConnectToDB(userTextField.getText(), pwBox.getText());
-            if (!name.equals("")) {
+            String name = getAssystUserName(userTextField.getText(), pwBox.getText());
+            if (!name.equals("")) {  // если подключение к БД успешное...
                 JOptionPane.showMessageDialog(null, "Добро пожаловать, " + name, "Успешное подключение к БД", JOptionPane.INFORMATION_MESSAGE);
                 if (cbox.isSelected()) {
-                    RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "Y");
-                    RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login", userTextField.getText());
-                    RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password", new String(encrypt(pwBox.getText(), userTextField.getText())));
+                    if (saveCred())
+                        JOptionPane.showMessageDialog(null, "Логин и пароль сохранен", "Вход в программу", JOptionPane.INFORMATION_MESSAGE);
+                    else
+                        JOptionPane.showMessageDialog(null, "Возникла проблема при сохранении логина и пароля", "Вход в программу", JOptionPane.ERROR_MESSAGE);
 
-                    JOptionPane.showMessageDialog(null, "Логин и пароль сохранен", "Вход в программу", JOptionPane.INFORMATION_MESSAGE);
+//                    Запускаем процесс инициализации оповещателя.
+                    loginForm.close();
+                    initNotifier();
                 }
                 userTextField.setText("");
                 pwBox.setText("");
@@ -183,48 +199,51 @@ public class Login extends Application {
         return true;
     }
 
-    private String tryConnectToDB(String login, String pass) {
-        Connection con = null;
-        CallableStatement cstmt = null;
-        ResultSet rs = null;
-
+    private Connection getDBConnection(String login, String pass) {
+        SQLServerDataSource ds = new SQLServerDataSource();
+        ds.setServerName(serverName);
+        ds.setPortNumber(portNumber);
+        ds.setDatabaseName(dbName);
+        ds.setUser(login);
+        ds.setPassword(pass);
         try {
-            // Подключаемся к БД
-            SQLServerDataSource ds = new SQLServerDataSource();
-            ds.setServerName(serverName);
-            ds.setPortNumber(portNumber);
-            ds.setDatabaseName(dbName);
-            ds.setUser(login);
-            ds.setPassword(pass);
-            con = ds.getConnection();
-
-
-            cstmt = con.prepareCall(String.format("SELECT u.assyst_usr_n FROM assyst_usr u WHERE u.assyst_usr_sc = '%s';", login));
-            rs = cstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getString("assyst_usr_n");
-            }
-        }
-        // Ловим ошибки
-        catch (Exception e) {
-            //e.printStackTrace();
+            return ds.getConnection();
+        } catch (SQLServerException e) {
             JOptionPane.showMessageDialog(null, "Не удалось подключиться к БД ASSYST под логином " + userTextField.getText(), "Ошибка подключения", JOptionPane.ERROR_MESSAGE);
-        } finally {
-            if (rs != null) try {
-                rs.close();
-            } catch (Exception ignored) {
-            }
-            if (cstmt != null) try {
-                cstmt.close();
-            } catch (Exception ignored) {
-            }
-            if (con != null) try {
-                con.close();
-            } catch (Exception ignored) {
+        }
+        return null;
+    }
 
+    private ResultSet executeSQLQuery(Connection con, String sqlQuery) {
+        try {
+            return con.prepareCall(sqlQuery).executeQuery();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private String getAssystUserName(String login, String pass) {
+        ResultSet rs;
+        // Подключаемся к БД
+        con = getDBConnection(login, pass);  // сохраняем подключение к БД в глобальной переменной
+        if (con != null) {
+            rs = executeSQLQuery(con, String.format("SELECT u.assyst_usr_n FROM assyst_usr u WHERE u.assyst_usr_sc = '%s';", login));
+            try {
+                if (rs != null && rs.next()) {
+                    return rs.getString("assyst_usr_n");
+                } else {
+                    JOptionPane.showMessageDialog(null, "Не удалось получить ФИО пользователя под логином \"" + userTextField.getText() + "\" ", "Ошибка", JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(null, "Не удалось получить ФИО пользователя под логином \"" + userTextField.getText() + "\" ", "Ошибка", JOptionPane.ERROR_MESSAGE);
             }
         }
         return "";
+    }
+
+    private void initNotifier() {
+
     }
 
     private void addAppToTray() {
@@ -232,7 +251,7 @@ public class Login extends Application {
             java.awt.Toolkit.getDefaultToolkit();
 
             java.awt.SystemTray tray = java.awt.SystemTray.getSystemTray();
-            java.awt.Image image = ImageIO.read(Login.class.getResource("res/icon16.png"));
+            java.awt.Image image = ImageIO.read(MainWindow.class.getResource("res/icon16.png"));
             trayIcon = new java.awt.TrayIcon(image);
 
             trayIcon.addActionListener(event -> Platform.runLater(this::showStage));
@@ -246,8 +265,14 @@ public class Login extends Application {
 
             java.awt.MenuItem exitItem = new java.awt.MenuItem("Выход");
             exitItem.addActionListener(event -> {
-                Platform.exit();
                 tray.remove(trayIcon);
+                Platform.exit();
+                if (con != null) {
+                    try {
+                        con.close();  // закрываем подключение к БД
+                    } catch (SQLException ignored) {
+                    }
+                }
             });
 
             // создаем popup меню
@@ -259,7 +284,6 @@ public class Login extends Application {
 
             // добавляем в трей trayIcon
             tray.add(trayIcon);
-            //  javax.swing.SwingUtilities.invokeLater(() -> trayIcon.displayMessage("hello","The time is now ",java.awt.TrayIcon.MessageType.INFO));
         } catch (java.awt.AWTException | IOException e) {
             System.out.println("Не могу инциализировать трей");
             e.printStackTrace();
@@ -274,16 +298,17 @@ public class Login extends Application {
         }
     }
 
-    private void saveDefaultDataInRegistry() {
-        if (!RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "ServerName", "10.95.1.56"))
-            System.out.println("Не записан ServerName");
-        if (!RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "DBName", "mvideorus_db"))
-            System.out.println("Не записан DBName");
-        if (!RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "PortNumber", "1433"))
-            System.out.println("Не записан PortNumber");
-        if (!RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "N"))
-            System.out.println("Не записан SaveCred");
-
+    private boolean saveDefaultDataInRegistry() {
+        boolean result = false;
+        if (RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "ServerName", "10.95.1.56"))
+            result = true;
+        if (RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "DBName", "mvideorus_db"))
+            result = true;
+        if (RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "PortNumber", "1433"))
+            result = true;
+        if (RegistryHelper.putStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred", "N"))
+            result = true;
+        return result;
     }
 
     private byte[] encrypt(String text, String keyWord) {
