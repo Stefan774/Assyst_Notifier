@@ -47,6 +47,7 @@ public class MainWindow extends Application {
     private int portNumber;
     private String userLogin;
     private String userPassword;
+    private String userFIO;
 
     private Connection con = null;
 
@@ -175,9 +176,9 @@ public class MainWindow extends Application {
 
     private boolean tryConnectToDB() {
         if (!userTextField.getText().equals("") && !pwBox.getText().equals("")) {
-            String name = getAssystUserName(userTextField.getText(), pwBox.getText());
-            if (!name.equals("")) {  // если подключение к БД успешное...
-                JOptionPane.showMessageDialog(null, "Добро пожаловать, " + name, "Успешное подключение к БД", JOptionPane.INFORMATION_MESSAGE);
+            userFIO = getAssystUserName(userTextField.getText(), pwBox.getText());
+            if (!userFIO.equals("")) {  // если подключение к БД успешное...
+                JOptionPane.showMessageDialog(null, "Добро пожаловать, " + userFIO, "Успешное подключение к БД", JOptionPane.INFORMATION_MESSAGE);
                 if (cbox.isSelected()) {
                     if (saveCred())
                         JOptionPane.showMessageDialog(null, "Логин и пароль сохранен", "Вход в программу", JOptionPane.INFORMATION_MESSAGE);
@@ -209,7 +210,7 @@ public class MainWindow extends Application {
         try {
             return ds.getConnection();
         } catch (SQLServerException e) {
-            JOptionPane.showMessageDialog(null, "Не удалось подключиться к БД ASSYST под логином " + userTextField.getText(), "Ошибка подключения", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(null, "Не удалось подключиться к БД ASSYST под логином \"" + userTextField.getText() + "\"", "Ошибка подключения", JOptionPane.ERROR_MESSAGE);
         }
         return null;
     }
@@ -242,8 +243,37 @@ public class MainWindow extends Application {
         return "";
     }
 
-    private void initNotifier() {
+    private IncidentList getUserCriticalIncidents() {
+        ResultSet rs;
+        IncidentList incidentList = new IncidentList();
+        String SQLQuery = String.format("SELECT\n" +
+                "id.event_type, i.incident_ref, i.inc_serious_id, id.remarks AS \"Desc\"\n" +
+                "FROM incident i\n" +
+                "  JOIN inc_data id ON i.incident_id = id.incident_id\n" +
+                "  JOIN assyst_usr u ON i.ass_usr_id = u.assyst_usr_id\n" +
+                "WHERE i.ass_svd_id = 180 -- наша группа\n" +
+                "      AND i.inc_status = 'o' -- только открытые\n" +
+                "      AND u.assyst_usr_n = 'Глынин Александр Валерьевич'\n" +
+                "      AND i.inc_serious_id IN (1, 2)  -- impact: 2 - HIGH, 1 - VIP\n" +
+                "      AND id.event_type IN ('i', 't')\n" +
+                "ORDER BY i.incident_ref DESC\n" +
+                ";", userFIO);
+        rs = executeSQLQuery(con, SQLQuery);
+        try {
+            while (rs != null && rs.next()) {
+                incidentList.add(rs.getString("event_type").charAt(0), rs.getInt("incident_ref"), rs.getInt("inc_serious_id"), rs.getString("Desc"));
+            }
+        } catch (SQLException ignored) {
+        }
 
+        System.out.println(incidentList.count());
+        System.out.println(incidentList);
+
+        return incidentList;
+    }
+
+    private void initNotifier() {
+        getUserCriticalIncidents();
     }
 
     private void addAppToTray() {
