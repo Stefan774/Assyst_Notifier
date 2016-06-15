@@ -5,6 +5,10 @@ public class Incident {
     private int refNo;
     private int incSerious;
     private String desc;
+    public static final int VIP = 1;
+    public static final int HIGH = 2;
+    public static final int NORMAL = 3;
+    public static final int LOW = 4;
 
     public char getEventType() {
         return eventType;

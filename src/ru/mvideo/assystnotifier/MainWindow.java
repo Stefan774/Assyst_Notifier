@@ -37,6 +37,7 @@ public class MainWindow extends Application {
     }
 
     private Stage loginForm = new Stage();
+    private Stage notifierForm;
     private TextField userTextField;
     private PasswordField pwBox;
     private CheckBox cbox;
@@ -48,8 +49,10 @@ public class MainWindow extends Application {
     private String userLogin;
     private String userPassword;
     private String userFIO;
+    private boolean useSavedCred;
 
     private Connection con = null;
+    private IncidentList incidentList;
 
 
     @Override
@@ -109,6 +112,7 @@ public class MainWindow extends Application {
         scene.getStylesheets().add(MainWindow.class.getResource("res/Login.css").toExternalForm());
 
         if (Objects.equals(RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "SaveCred"), "Y")) {
+            useSavedCred = true;
             userLogin = RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Login");
             userPassword = decrypt(RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "Password").getBytes(), userLogin);
             serverName = RegistryHelper.getStrRegKey(WinReg.HKEY_LOCAL_MACHINE, "SOFTWARE\\TBREIN\\Assyst_Notifier", "ServerName");
@@ -118,6 +122,7 @@ public class MainWindow extends Application {
             pwBox.setText(userPassword);
             cbox.setSelected(true);
         } else {
+            useSavedCred = false;
             serverName = "10.95.1.56";
             dbName = "mvideorus_db";
             portNumber = 1433;
@@ -147,8 +152,12 @@ public class MainWindow extends Application {
         ft.setCycleCount(2);
         ft.setOnFinished(e -> {
             primaryStage.close();
-            loginForm.show();
             addAppToTray();
+            if (!useSavedCred) {
+                loginForm.show();
+            } else {
+                initNotifier();
+            }
         });
         ft.play();
 //      ---
@@ -178,19 +187,21 @@ public class MainWindow extends Application {
         if (!userTextField.getText().equals("") && !pwBox.getText().equals("")) {
             userFIO = getAssystUserName(userTextField.getText(), pwBox.getText());
             if (!userFIO.equals("")) {  // если подключение к БД успешное...
-                JOptionPane.showMessageDialog(null, "Добро пожаловать, " + userFIO, "Успешное подключение к БД", JOptionPane.INFORMATION_MESSAGE);
-                if (cbox.isSelected()) {
-                    if (saveCred())
-                        JOptionPane.showMessageDialog(null, "Логин и пароль сохранен", "Вход в программу", JOptionPane.INFORMATION_MESSAGE);
-                    else
-                        JOptionPane.showMessageDialog(null, "Возникла проблема при сохранении логина и пароля", "Вход в программу", JOptionPane.ERROR_MESSAGE);
+                if (!useSavedCred) {
+                    JOptionPane.showMessageDialog(null, "Добро пожаловать, " + userFIO, "Успешное подключение к БД", JOptionPane.INFORMATION_MESSAGE);
+                    if (cbox.isSelected()) {
+                        if (saveCred())
+                            JOptionPane.showMessageDialog(null, "Логин и пароль сохранен", "Вход в программу", JOptionPane.INFORMATION_MESSAGE);
+                        else
+                            JOptionPane.showMessageDialog(null, "Возникла проблема при сохранении логина и пароля", "Вход в программу", JOptionPane.ERROR_MESSAGE);
 
 //                    Запускаем процесс инициализации оповещателя.
-                    loginForm.close();
-                    initNotifier();
+                        loginForm.close();
+                        initNotifier();
+                    }
+                    userTextField.setText("");
+                    pwBox.setText("");
                 }
-                userTextField.setText("");
-                pwBox.setText("");
             } else {
                 pwBox.setText("");
                 return false;
@@ -245,7 +256,6 @@ public class MainWindow extends Application {
 
     private IncidentList getUserCriticalIncidents() {
         ResultSet rs;
-        IncidentList incidentList = new IncidentList();
         String SQLQuery = String.format("SELECT\n" +
                 "id.event_type, i.incident_ref, i.inc_serious_id, id.remarks AS \"Desc\"\n" +
                 "FROM incident i\n" +
@@ -253,27 +263,64 @@ public class MainWindow extends Application {
                 "  JOIN assyst_usr u ON i.ass_usr_id = u.assyst_usr_id\n" +
                 "WHERE i.ass_svd_id = 180 -- наша группа\n" +
                 "      AND i.inc_status = 'o' -- только открытые\n" +
-                "      AND u.assyst_usr_n = 'Глынин Александр Валерьевич'\n" +
-                "      AND i.inc_serious_id IN (1, 2)  -- impact: 2 - HIGH, 1 - VIP\n" +
+                "      AND u.assyst_usr_n = '%s'\n" +
+                "     -- AND i.inc_serious_id IN (1, 2)  -- impact: 2 - HIGH, 1 - VIP\n" +
                 "      AND id.event_type IN ('i', 't')\n" +
                 "ORDER BY i.incident_ref DESC\n" +
                 ";", userFIO);
         rs = executeSQLQuery(con, SQLQuery);
         try {
+            incidentList = new IncidentList();
             while (rs != null && rs.next()) {
                 incidentList.add(rs.getString("event_type").charAt(0), rs.getInt("incident_ref"), rs.getInt("inc_serious_id"), rs.getString("Desc"));
             }
         } catch (SQLException ignored) {
         }
 
-        System.out.println(incidentList.count());
-        System.out.println(incidentList);
+        System.out.println("-------------- " + userFIO + " --------------");
+        System.out.println("VIP - " + incidentList.count(Incident.VIP));
+        System.out.println("HIGH - " + incidentList.count(Incident.HIGH));
+        System.out.println("NORMAL - " + incidentList.count(Incident.NORMAL));
+        System.out.println("LOW - " + incidentList.count(Incident.LOW));
+        System.out.println("ВСЕГО - " + incidentList.count());
+        System.out.println("---------------------------------------------------------");
 
         return incidentList;
     }
 
     private void initNotifier() {
-        getUserCriticalIncidents();
+        if (con != null) {
+            if (getUserCriticalIncidents().count() > 0) {
+                notifierForm = new Stage();
+                GridPane root = new GridPane();
+                root.setAlignment(Pos.TOP_CENTER);
+                root.setHgap(10);
+                root.setVgap(10);
+                root.setPadding(new Insets(25, 25, 25, 25));
+
+                Text scenetitle = new Text("  Добро пожаловать, " + userFIO);
+                scenetitle.setId("MainText");
+                root.add(scenetitle, 0, 0, 2, 1);
+                Text scenetitle2 = new Text("  Сейчас на Вас " + incidentList.count() + " открытых инцидентов, из них:");
+                root.add(scenetitle2, 1, 1, 2, 1);
+
+                Scene form = new Scene(root, 400, 250);
+
+//                notifierForm.setX(round(rect.getMaxX() / 2) - 300);
+//                notifierForm.setY(round(rect.getMaxY() / 2) - 150);
+
+                notifierForm.initStyle(StageStyle.DECORATED);
+                notifierForm.setScene(form);
+                notifierForm.setOnCloseRequest(we -> {
+                    Platform.exit();
+                });
+                notifierForm.show();
+            }
+        } else {
+            getDBConnection(userLogin, userPassword);
+            userFIO = getAssystUserName(userLogin, userPassword);
+            initNotifier();
+        }
     }
 
     private void addAppToTray() {

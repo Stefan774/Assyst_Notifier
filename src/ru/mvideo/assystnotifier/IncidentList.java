@@ -34,4 +34,12 @@ public class IncidentList {
     public int count() {
         return incidents.size();
     }
+
+    public int count(int incSerious) {
+        int count = 0;
+        for (Incident inc : incidents) {
+            if (inc.getIncSerious() == incSerious) count++;
+        }
+        return count;
+    }
 }
